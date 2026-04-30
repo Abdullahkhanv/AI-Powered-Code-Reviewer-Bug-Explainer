@@ -14,12 +14,7 @@ from groq import Groq
 # os.environ["GROQ_API_KEY"] = "your_api_key_here"
 
 # Option 2:
-api_key = os.environ.get("GROQ_API_KEY")
-
-if not api_key:
-    raise ValueError("❌ GROQ_API_KEY is not set. Please add it as an environment variable.")
-
-client = Groq(api_key=api_key)
+client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
 # ------------------------------
 # 🧠 AI FUNCTION
 # ------------------------------
