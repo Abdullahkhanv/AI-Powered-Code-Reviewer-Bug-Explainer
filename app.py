@@ -6,32 +6,33 @@ import os
 import gradio as gr
 from groq import Groq
 
-# ------------------------------
-# 🔑 SET YOUR API KEY HERE
-# ------------------------------
-# Option 1 (recommended in Colab):
-# import os
-# os.environ["GROQ_API_KEY"] = "your_api_key_here"
+MODEL_NAME = "llama-3.3-70b-versatile"
 
-# Option 2:
-api_key = os.environ.get("GROQ_API_KEY")
 
-api_key = os.environ.get("GROQ_API_KEY")
+def get_api_key(ui_key: str = "") -> str:
+    """
+    Prefer the key typed in the UI.
+    Fallback to environment variable.
+    """
+    ui_key = (ui_key or "").strip()
+    env_key = (os.environ.get("GROQ_API_KEY") or "").strip()
+    return ui_key if ui_key else env_key
 
-if api_key:
-    client = Groq(api_key=api_key)
-else:
-    client = None
 
-client = Groq(api_key=api_key)
-# ------------------------------
-# 🧠 AI FUNCTION
-# ------------------------------
-def analyze_code(code, language, beginner_mode):
-    if not code.strip():
+def analyze_code(code, language, beginner_mode, api_key):
+    if not code or not code.strip():
         return "⚠️ Please enter some code first."
 
-    # Prompt engineering (important part)
+    key = get_api_key(api_key)
+
+    if not key:
+        return (
+            "❌ GROQ API key is missing.\n\n"
+            "Add it in one of these ways:\n"
+            "1. Paste it in the API Key box in the app, or\n"
+            "2. Set the GROQ_API_KEY environment variable."
+        )
+
     prompt = f"""
 You are an expert programming tutor and code reviewer.
 
@@ -42,42 +43,53 @@ Analyze the following {language} code and provide:
 3. ⚡ Optimized Code
 4. 📊 Time & Space Complexity (Big-O)
 
+Rules:
+- Use clear headings.
+- Be beginner-friendly.
+- If there are no bugs, say so clearly.
+- Keep the answer practical and easy to understand.
+
 Code:
 {code}
-
-Make the response well-structured with headings.
 """
 
     try:
+        client = Groq(api_key=key)
+
         response = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
+            model=MODEL_NAME,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
         )
 
         return response.choices[0].message.content
 
     except Exception as e:
-        return f"❌ Error: {str(e)}"
+        return f"❌ Error while calling Groq API:\n\n{str(e)}"
 
 
-# ------------------------------
-# 📂 FILE HANDLER
-# ------------------------------
 def handle_file(file):
     if file is None:
         return ""
+
     try:
-        with open(file.name, "r") as f:
+        path = file.name if hasattr(file, "name") else str(file)
+
+        with open(path, "r", encoding="utf-8", errors="ignore") as f:
             return f.read()
-    except:
-        return "❌ Could not read file."
+
+    except Exception as e:
+        return f"❌ Could not read file: {str(e)}"
 
 
-# ------------------------------
-# 🎨 GRADIO UI (Gen Z Style)
-# ------------------------------
+# ==============================
+# Gradio UI
+# ==============================
 with gr.Blocks(theme=gr.themes.Soft()) as app:
-
     gr.Markdown(
         """
         # 🤖 AI Code Reviewer
@@ -87,6 +99,12 @@ with gr.Blocks(theme=gr.themes.Soft()) as app:
 
     with gr.Row():
         with gr.Column():
+            api_key_input = gr.Textbox(
+                label="🔐 GROQ API Key",
+                placeholder="Paste your Groq API key here",
+                type="password"
+            )
+
             code_input = gr.Textbox(
                 label="💻 Paste Your Code",
                 lines=15,
@@ -96,7 +114,7 @@ with gr.Blocks(theme=gr.themes.Soft()) as app:
             file_upload = gr.File(label="📂 Or Upload Code File")
 
             language = gr.Dropdown(
-                ["Python", "C++", "Java", "JavaScript"],
+                choices=["Python", "C++", "Java", "JavaScript"],
                 label="🌐 Select Language",
                 value="Python"
             )
@@ -111,9 +129,6 @@ with gr.Blocks(theme=gr.themes.Soft()) as app:
         with gr.Column():
             output = gr.Markdown(label="📊 AI Analysis")
 
-    # ------------------------------
-    # 🔗 CONNECTIONS
-    # ------------------------------
     file_upload.change(
         fn=handle_file,
         inputs=file_upload,
@@ -122,11 +137,9 @@ with gr.Blocks(theme=gr.themes.Soft()) as app:
 
     analyze_btn.click(
         fn=analyze_code,
-        inputs=[code_input, language, beginner_mode],
+        inputs=[code_input, language, beginner_mode, api_key_input],
         outputs=output
     )
 
-# ------------------------------
-# ▶️ RUN APP
-# ------------------------------
-app.launch(debug=True)
+if __name__ == "__main__":
+    app.launch(debug=True)
